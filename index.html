@@ -1,0 +1,1234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Aquarium Life - Interactive Fish Tank Simulator</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <style>
+    :root{
+      --bg:#0a0f18;
+      --accent:#58d7ff;
+      --accent2:#78ffb6;
+      --accent3:#ffaf58;
+      --glass:#0b1828;
+      --panel:#0b1320;
+      --text:#e9f6ff;
+      --muted:#b9d7e8;
+      --danger:#ff5f5f;
+      --gold:#ffd166;
+      --good:#79ffa6;
+    }
+
+    *{ box-sizing:border-box; font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji"; }
+
+    html, body {
+      height: 100%;
+      margin: 0;
+      background: radial-gradient(1200px 800px at 70% 10%, #0c1e33 0%, #07101b 55%, #050b12 100%);
+      color: var(--text);
+      overflow: hidden;
+    }
+
+    /* Floating caustics lighting overlay */
+    .caustics {
+      position: fixed;
+      inset: 0;
+      mix-blend-mode: screen;
+      pointer-events: none;
+      background:
+        radial-gradient(120px 80px at 10% 20%, rgba(120,180,255,.08), transparent 70%),
+        radial-gradient(240px 120px at 80% 10%, rgba(120,180,255,.06), transparent 70%),
+        radial-gradient(180px 100px at 40% 60%, rgba(120,180,255,.05), transparent 70%);
+      animation: drift 18s linear infinite;
+      opacity:.6;
+      filter: blur(0.5px);
+    }
+    @keyframes drift {
+      0% { transform: translateY(0) translateX(0); }
+      50% { transform: translateY(-20px) translateX(10px); }
+      100% { transform: translateY(0) translateX(0); }
+    }
+
+    /* UI Layout */
+    .ui {
+      position: fixed; inset: 0; display: grid; grid-template-rows: auto 1fr auto; pointer-events:none;
+    }
+
+    .topbar {
+      display: flex; gap: 12px; align-items: center; padding: 10px 14px;
+      pointer-events: auto;
+    }
+
+    .title {
+      font-weight: 800; letter-spacing: 0.4px; font-size: 18px;
+      background: linear-gradient(90deg, var(--accent), var(--accent2), var(--accent3));
+      -webkit-background-clip: text; background-clip: text; color: transparent;
+      text-shadow: 0 0 20px rgba(120,220,255,0.25);
+    }
+
+    .money {
+      margin-left: auto;
+      background: rgba(30,60,96,.35);
+      border: 1px solid rgba(120,220,255,.25);
+      padding: 6px 10px; border-radius: 10px;
+      display: flex; align-items: center; gap: 8px;
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,0.03), 0 6px 12px rgba(0,0,0,.25);
+    }
+    .money .coin { width: 12px; height: 12px; border-radius: 50%; background: radial-gradient(circle at 30% 30%, #fff3c0, #e3b218); box-shadow: 0 0 8px rgba(255,209,102,.4); }
+
+    .panelrow {
+      pointer-events: none;
+      display: grid; grid-template-columns: 270px 1fr 290px; gap: 14px; padding: 0 14px 14px 14px; align-items: stretch;
+    }
+
+    .panel {
+      pointer-events: auto;
+      background: linear-gradient(180deg, rgba(14,26,42,.75), rgba(8,16,28,.75));
+      border: 1px solid rgba(120,220,255,.15);
+      border-radius: 14px;
+      backdrop-filter: blur(6px);
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,0.03), 0 14px 40px rgba(0,0,0,.35);
+      overflow: hidden;
+    }
+
+    .panel h3 {
+      margin: 0; padding: 10px 12px; font-size: 13px; text-transform: uppercase; letter-spacing: 1.2px;
+      color: var(--muted); border-bottom: 1px solid rgba(120,220,255,.12);
+      background: linear-gradient(180deg, rgba(255,255,255,.02), rgba(255,255,255,0));
+    }
+
+    .panel .content { padding: 10px; display: grid; gap: 10px; }
+
+    .btn {
+      appearance: none; border: 1px solid rgba(120,220,255,.2);
+      background: linear-gradient(180deg, rgba(70,120,190,.28), rgba(30,70,120,.22));
+      color: var(--text); padding: 8px 10px; border-radius: 10px; cursor: pointer;
+      transition: transform .06s ease, background .2s ease, box-shadow .2s ease, border-color .2s ease;
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,.06), 0 6px 14px rgba(0,0,0,.25);
+    }
+    .btn:hover { transform: translateY(-1px); box-shadow: inset 0 0 0 1px rgba(255,255,255,.08), 0 10px 26px rgba(0,0,0,.35);}
+    .btn:active { transform: translateY(0); }
+
+    .btn.secondary {
+      background: linear-gradient(180deg, rgba(40,90,150,.22), rgba(24,60,100,.18));
+    }
+
+    .toolrow { display:flex; gap:8px; flex-wrap: wrap; }
+    .toggle { display:flex; align-items:center; gap:8px; }
+    .toggle input { transform: scale(1.2); }
+
+    .slider { display:grid; gap:6px; }
+    .slider label { font-size: 12px; color: var(--muted); }
+    .slider input[type="range"] { width: 100%; }
+
+    .stats, .log {
+      background: rgba(10,20,34,.55); padding: 10px; border-radius: 10px; border: 1px solid rgba(120,220,255,.12);
+    }
+    .stats-row { display:flex; justify-content: space-between; font-size: 13px; color: var(--muted); }
+    .bar {
+      height: 10px; border-radius: 6px; overflow: hidden; background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.06);
+    }
+    .bar > span { display:block; height: 100%; background: linear-gradient(90deg, var(--accent2), var(--accent)); }
+
+    .legend {
+      display:flex; gap:6px; flex-wrap: wrap; font-size: 12px; color: var(--muted);
+    }
+    .legend .chip {
+      display:flex; align-items:center; gap:6px; background: rgba(255,255,255,.04);
+      border: 1px solid rgba(120,220,255,.14); border-radius: 8px; padding: 4px 8px;
+    }
+    .legend .dot { width:10px; height:10px; border-radius:50%; }
+
+    .toolbar {
+      display:flex; gap:8px; flex-wrap: wrap;
+    }
+
+    .footer {
+      display:flex; align-items:center; justify-content: space-between; padding: 10px 14px;
+      pointer-events: auto;
+    }
+
+    /* Tank */
+    .tank-wrap {
+      pointer-events: auto;
+      position: relative; width: 100%; height: 100%;
+    }
+    canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+
+    /* Main Menu Overlay */
+    .overlay {
+      position: fixed; inset: 0; display: grid; place-items: center; background: radial-gradient(900px 700px at 50% 30%, rgba(10,24,42,.9) 0%, rgba(6,12,20,.82) 60%, rgba(5,10,16,.8) 100%);
+      backdrop-filter: blur(6px);
+      z-index: 50;
+    }
+    .menu {
+      width: min(860px, 92vw);
+      background: linear-gradient(180deg, rgba(17,32,54,.75), rgba(10,20,34,.75));
+      border: 1px solid rgba(120,220,255,.18);
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,.04), 0 24px 60px rgba(0,0,0,.5);
+      border-radius: 16px; overflow: hidden;
+      animation: pop .3s ease;
+    }
+    @keyframes pop { from { transform: translateY(8px) scale(.98); opacity: .6; } to { transform: translateY(0) scale(1); opacity:1; } }
+
+    .menu-header {
+      padding: 18px 18px 10px 18px;
+      display:flex; gap:14px; align-items: center; justify-content: space-between;
+      border-bottom: 1px solid rgba(120,220,255,.15);
+    }
+    .menu-title {
+      font-size: 28px; font-weight: 800; letter-spacing: .5px;
+      background: linear-gradient(90deg, var(--accent), var(--accent2), var(--accent3));
+      -webkit-background-clip: text; color: transparent;
+      text-shadow: 0 0 24px rgba(120,220,255,.25);
+    }
+    .menu-sub { color: var(--muted); font-size: 13px; }
+
+    .menu-content {
+      display:grid; grid-template-columns: 1.3fr 1fr; gap: 16px; padding: 16px;
+    }
+    .menu-panel {
+      background: rgba(255,255,255,.03);
+      border: 1px solid rgba(120,220,255,.15);
+      border-radius: 12px; overflow:hidden;
+    }
+    .menu-panel h4 {
+      margin:0; padding:10px 12px; font-size: 13px; letter-spacing:1px; text-transform: uppercase; color: var(--muted);
+      border-bottom:1px solid rgba(120,220,255,.12);
+      background: linear-gradient(180deg, rgba(255,255,255,.02), rgba(255,255,255,0));
+    }
+    .menu-panel .body { padding: 12px; display:grid; gap:8px; }
+
+    .difficulty {
+      display:grid; grid-template-columns: repeat(3, 1fr); gap: 8px;
+    }
+    .pill {
+      padding: 10px; text-align: center; border-radius: 10px; cursor: pointer;
+      background: linear-gradient(180deg, rgba(80,140,210,.25), rgba(40,80,150,.2));
+      border: 1px solid rgba(120,220,255,.18);
+      transition: transform .06s ease, box-shadow .2s ease, background .2s ease;
+    }
+    .pill:hover { transform: translateY(-1px); }
+    .pill.active { box-shadow: inset 0 0 0 1px rgba(255,255,255,.08), 0 8px 24px rgba(0,0,0,.35); }
+
+    .menu-actions { display:flex; gap:10px; justify-content: flex-end; padding: 12px 16px 16px 16px; }
+
+    /* Tooltips */
+    .tooltip {
+      position: absolute; background: rgba(0,0,0,.75); border: 1px solid rgba(255,255,255,.1);
+      color:#dff7ff; font-size:11px; padding: 6px 8px; border-radius: 8px; pointer-events:none;
+      transform: translate(-50%, -140%); white-space: nowrap; z-index: 10;
+      opacity: 0; transition: opacity .1s ease;
+    }
+
+    /* Notifications */
+    .toast-wrap { position: fixed; right: 12px; bottom: 12px; display: grid; gap: 8px; z-index: 60; }
+    .toast {
+      background: linear-gradient(180deg, rgba(15,30,48,.9), rgba(10,20,34,.9));
+      border:1px solid rgba(120,220,255,.15);
+      color: var(--text); padding: 8px 12px; border-radius: 10px; box-shadow: 0 14px 32px rgba(0,0,0,.4);
+      display:flex; align-items:center; gap:10px; min-width: 220px;
+    }
+    .toast.good { border-color: rgba(120,255,180,.2); }
+    .toast.bad { border-color: rgba(255,120,120,.2); }
+
+    .hidden { display: none !important; }
+
+    /* Cursor */
+    .cursor {
+      position: fixed; pointer-events: none; width: 28px; height: 28px; border-radius: 50%;
+      border: 2px solid rgba(120,220,255,.6); box-shadow: 0 0 18px rgba(120,220,255,.4);
+      transform: translate(-50%, -50%); mix-blend-mode: screen; z-index: 100; opacity: .7;
+    }
+
+    /* Mobile helpers */
+    @media (max-width: 900px) {
+      .panelrow { grid-template-columns: 1fr; grid-template-rows: auto auto auto; }
+      .menu-content { grid-template-columns: 1fr; }
+      .toolbar { justify-content: center; }
+      .topbar .title { font-size: 16px; }
+      .panel h3 { font-size: 12px; }
+    }
+  </style>
+  <script type="importmap">
+  {
+    "imports": {
+      "seedrandom": "https://cdn.jsdelivr.net/npm/seedrandom@3.0.5/+esm"
+    }
+  }
+  </script>
+</head>
+<body>
+  <div class="caustics"></div>
+  <div class="ui">
+    <div class="topbar">
+      <div class="title">AQUARIUM LIFE</div>
+      <div class="legend">
+        <div class="chip"><span class="dot" style="background: var(--accent2);"></span> Health</div>
+        <div class="chip"><span class="dot" style="background: var(--gold);"></span> Hunger</div>
+        <div class="chip"><span class="dot" style="background: #9a7cff;"></span> Boredom</div>
+      </div>
+      <div class="money" id="moneyBox"><span class="coin"></span><span id="moneyValue">0</span></div>
+    </div>
+    <div class="panelrow">
+      <div class="panel">
+        <h3>Tank Controls</h3>
+        <div class="content">
+          <div class="toolbar">
+            <button class="btn" data-tool="hand">Hand</button>
+            <button class="btn secondary" data-tool="feed">Feed</button>
+            <button class="btn secondary" data-tool="placeDecor">Place Decor</button>
+            <button class="btn secondary" data-tool="net">Net Fish</button>
+            <button class="btn secondary" data-tool="plant">Plant</button>
+            <button class="btn secondary" data-tool="bubble">Bubbler</button>
+          </div>
+          <div class="toolrow">
+            <div class="slider">
+              <label>Time Scale: <span id="timeScaleLabel">1.0x</span></label>
+              <input id="timeScale" type="range" min="0.2" max="3" step="0.1" value="1">
+            </div>
+            <div class="slider">
+              <label>Water Clarity: <span id="clarityLabel">1.0</span></label>
+              <input id="clarity" type="range" min="0.2" max="1.2" step="0.05" value="1">
+            </div>
+          </div>
+
+          <div class="stats">
+            <div class="stats-row"><span>Tank Cleanliness</span><span id="cleanlinessText">100%</span></div>
+            <div class="bar"><span id="cleanlinessBar" style="width: 100%; background: linear-gradient(90deg,#78ffb6,#58d7ff)"></span></div>
+            <div class="stats-row" style="margin-top:8px;"><span>Oxygenation</span><span id="oxygenText">80%</span></div>
+            <div class="bar"><span id="oxygenBar" style="width: 80%; background: linear-gradient(90deg,#78ffb6,#58d7ff)"></span></div>
+          </div>
+
+          <div class="toolrow">
+            <button class="btn" id="buyFish">Buy Fish ($40)</button>
+            <button class="btn" id="sellFish">Sell Selected</button>
+            <button class="btn" id="cleanTank">Clean Tank</button>
+            <button class="btn" id="toggleUI">Hide UI</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h3>Aquarium</h3>
+        <div class="tank-wrap">
+          <canvas id="tank"></canvas>
+          <div class="tooltip" id="tooltip"></div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h3>Fish & Ecology</h3>
+        <div class="content">
+          <div class="stats">
+            <div class="stats-row"><span>Population</span><span id="popText">0</span></div>
+            <div class="stats-row"><span>Decor Count</span><span id="decorText">0</span></div>
+            <div class="stats-row"><span>Plants</span><span id="plantText">0</span></div>
+            <div class="stats-row"><span>Food Pellets</span><span id="foodText">0</span></div>
+          </div>
+          <div class="log" id="log" style="height: 220px; overflow: auto;">
+            <div style="color: var(--muted);">Welcome to Aquarium Life. Keep your fish healthy, fed, and happy. Add decorations to reduce boredom and plants to improve oxygen. Bubbler increases oxygenation too!</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer">
+      <div style="color: var(--muted); font-size: 12px;">Tools: Left click to use, Right click to cancel. Hold and drag Hand to stir water and attract fish.</div>
+      <div style="display:flex; gap: 8px;">
+        <button class="btn secondary" id="saveBtn">Save</button>
+        <button class="btn secondary" id="loadBtn">Load</button>
+        <button class="btn" id="resetBtn">Reset</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="overlay" id="menu">
+    <div class="menu">
+      <div class="menu-header">
+        <div>
+          <div class="menu-title">Aquarium Life</div>
+          <div class="menu-sub">A cozy fish tank simulator. Care, decorate, and relax.</div>
+        </div>
+        <div class="menu-sub">v1.0</div>
+      </div>
+      <div class="menu-content">
+        <div class="menu-panel">
+          <h4>New Aquarium</h4>
+          <div class="body">
+            <div class="difficulty" id="difficulty">
+              <div class="pill active" data-diff="easy">Easy</div>
+              <div class="pill" data-diff="normal">Normal</div>
+              <div class="pill" data-diff="hard">Hard</div>
+            </div>
+            <div class="slider">
+              <label>Starting Money: <span id="startMoneyLabel">$200</span></label>
+              <input id="startMoney" type="range" min="50" max="500" step="10" value="200">
+            </div>
+            <div class="slider">
+              <label>Tank Size: <span id="tankSizeLabel">Medium</span></label>
+              <input id="tankSize" type="range" min="0" max="2" step="1" value="1">
+            </div>
+          </div>
+        </div>
+        <div class="menu-panel">
+          <h4>Tips</h4>
+          <div class="body" style="font-size: 13px; color: var(--muted); line-height: 1.4;">
+            - Fish get hungry over time; feed them pellets. Too many pellets reduce cleanliness.
+            - Fish get bored without decorations. Add rocks, shells, and plants.
+            - Plants and bubblers improve oxygenation; oxygen drops with high population.
+            - Stir water with the Hand to attract curious fish and reduce boredom a bit.
+            - Keep cleanliness high to avoid health penalties.
+            - Sell fish to earn money and manage population.
+            - Save and load from local storage.
+          </div>
+        </div>
+      </div>
+      <div class="menu-actions">
+        <button class="btn secondary" id="randomizeBtn">Randomize</button>
+        <button class="btn" id="startBtn">Start Aquarium</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast-wrap" id="toastWrap"></div>
+  <div class="cursor" id="cursor" style="display:none"></div>
+
+  <script type="module">
+    import seedrandom from "seedrandom";
+
+    // Utility
+    const clamp = (v,min,max)=>Math.max(min,Math.min(max,v));
+    const rand = (a=1,b=0)=>Math.random()*(a-b)+b;
+    const lerp = (a,b,t)=>a+(b-a)*t;
+    const now = ()=>performance.now()/1000;
+    const pick = arr => arr[(Math.random()*arr.length)|0];
+    const uid = (()=>{ let i=0; return ()=>++i; })();
+
+    // Canvas Setup
+    const canvas = document.getElementById('tank');
+    const ctx = canvas.getContext('2d');
+    let W=innerWidth, H=innerHeight;
+    function resize(){
+      W = canvas.width = innerWidth;
+      H = canvas.height = innerHeight - 190; // leave UI space
+    }
+    addEventListener('resize', resize); resize();
+
+    // Game State
+    const state = {
+      rng: seedrandom(String(Date.now())),
+      started: false,
+      difficulty: 'easy',
+      money: 200,
+      timeScale: 1,
+      clarity: 1,
+      cleanliness: 1,
+      oxygen: 0.8,
+      tankSize: 1, // 0 small, 1 medium, 2 large
+      tool: 'hand',
+      food: [],
+      fish: [],
+      decor: [],
+      plants: [],
+      bubblers: [],
+      particles: [],
+      selectedFish: null,
+      hover: null,
+      drag: null,
+      logs: [],
+      lastTime: now(),
+      attract: {x: W/2, y: H/2, strength: 0},
+    };
+
+    // UI Elements
+    const tooltip = document.getElementById('tooltip');
+    const moneyValue = document.getElementById('moneyValue');
+    const cleanlinessBar = document.getElementById('cleanlinessBar');
+    const cleanlinessText = document.getElementById('cleanlinessText');
+    const oxygenBar = document.getElementById('oxygenBar');
+    const oxygenText = document.getElementById('oxygenText');
+    const popText = document.getElementById('popText');
+    const decorText = document.getElementById('decorText');
+    const plantText = document.getElementById('plantText');
+    const foodText = document.getElementById('foodText');
+    const logEl = document.getElementById('log');
+    const toastWrap = document.getElementById('toastWrap');
+    const cursorEl = document.getElementById('cursor');
+
+    // Menu elements
+    const menu = document.getElementById('menu');
+    const startBtn = document.getElementById('startBtn');
+    const randomizeBtn = document.getElementById('randomizeBtn');
+    const startMoney = document.getElementById('startMoney');
+    const startMoneyLabel = document.getElementById('startMoneyLabel');
+    const tankSize = document.getElementById('tankSize');
+    const tankSizeLabel = document.getElementById('tankSizeLabel');
+    const diffWrap = document.getElementById('difficulty');
+
+    // Controls
+    const timeScaleEl = document.getElementById('timeScale');
+    const timeScaleLabel = document.getElementById('timeScaleLabel');
+    const clarityEl = document.getElementById('clarity');
+    const clarityLabel = document.getElementById('clarityLabel');
+
+    // Buttons
+    const buyFishBtn = document.getElementById('buyFish');
+    const sellFishBtn = document.getElementById('sellFish');
+    const cleanTankBtn = document.getElementById('cleanTank');
+    const toggleUIBtn = document.getElementById('toggleUI');
+    const saveBtn = document.getElementById('saveBtn');
+    const loadBtn = document.getElementById('loadBtn');
+    const resetBtn = document.getElementById('resetBtn');
+
+    // Tools
+    document.querySelectorAll('[data-tool]').forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        state.tool = btn.dataset.tool;
+        notify("Tool: " + state.tool, 'good');
+        updateToolButtons();
+      });
+    });
+    function updateToolButtons(){
+      document.querySelectorAll('[data-tool]').forEach(b=>{
+        if(b.dataset.tool===state.tool){ b.classList.add('active'); b.style.borderColor='rgba(120,255,200,.45)';}
+        else { b.classList.remove('active'); b.style.borderColor='rgba(120,220,255,.2)';}
+      });
+    }
+    updateToolButtons();
+
+    // Menu logic
+    startMoney.addEventListener('input', ()=>{
+      startMoneyLabel.textContent = '$' + startMoney.value;
+    });
+    tankSize.addEventListener('input', ()=>{
+      tankSizeLabel.textContent = ['Small','Medium','Large'][+tankSize.value];
+    });
+    diffWrap.addEventListener('click', (e)=>{
+      const p = e.target.closest('.pill'); if(!p) return;
+      diffWrap.querySelectorAll('.pill').forEach(x=>x.classList.remove('active'));
+      p.classList.add('active');
+      state.difficulty = p.dataset.diff;
+    });
+    randomizeBtn.addEventListener('click', ()=>{
+      const vals = [50,100,150,200,250,300,350,400,450,500];
+      startMoney.value = pick(vals);
+      startMoney.dispatchEvent(new Event('input'));
+      tankSize.value = (Math.random()*3)|0; tankSize.dispatchEvent(new Event('input'));
+      const d = pick(['easy','normal','hard']);
+      diffWrap.querySelectorAll('.pill').forEach(x=>{x.classList.toggle('active', x.dataset.diff===d);});
+      state.difficulty = d;
+    });
+
+    startBtn.addEventListener('click', ()=>{
+      state.money = +startMoney.value;
+      state.tankSize = +tankSize.value;
+      state.started = true;
+      menu.classList.add('hidden');
+      initAquarium();
+      notify("Welcome! Buy fish, add decor and plants, and keep them happy.");
+    });
+
+    // Controls handlers
+    timeScaleEl.addEventListener('input', ()=>{
+      state.timeScale = +timeScaleEl.value;
+      timeScaleLabel.textContent = state.timeScale.toFixed(1)+'x';
+    });
+    clarityEl.addEventListener('input', ()=>{
+      state.clarity = +clarityEl.value;
+      clarityLabel.textContent = state.clarity.toFixed(2);
+    });
+
+    buyFishBtn.addEventListener('click', ()=>{
+      const cost = 40;
+      if(state.money < cost) return notify("Not enough money.", 'bad');
+      state.money -= cost;
+      addFish();
+      log("Bought a fish for $"+cost+".");
+    });
+
+    sellFishBtn.addEventListener('click', ()=>{
+      if(!state.selectedFish) return notify("Select a fish first (click it).", 'bad');
+      const value = Math.floor(30 + 40 * state.selectedFish.health);
+      state.money += value;
+      const idx = state.fish.indexOf(state.selectedFish);
+      if(idx>=0) state.fish.splice(idx,1);
+      log("Sold a fish for $"+value+".");
+      state.selectedFish = null;
+    });
+
+    cleanTankBtn.addEventListener('click', ()=>{
+      const cost=10;
+      if(state.money < cost) return notify("Need $"+cost+" to clean.", 'bad');
+      state.money -= cost;
+      state.cleanliness = clamp(state.cleanliness + 0.5, 0, 1);
+      notify("Tank cleaned.", 'good');
+    });
+
+    toggleUIBtn.addEventListener('click', ()=>{
+      document.querySelectorAll('.panel').forEach(p=>{
+        if(p.querySelector('h3')?.textContent!=='Aquarium'){ p.classList.toggle('hidden'); }
+      });
+      toggleUIBtn.textContent = toggleUIBtn.textContent.includes('Hide')? 'Show UI':'Hide UI';
+    });
+
+    saveBtn.addEventListener('click', ()=>save());
+    loadBtn.addEventListener('click', ()=>{ if(load()) notify("Loaded save.", 'good'); else notify("No save found.", 'bad');});
+    resetBtn.addEventListener('click', ()=>{
+      localStorage.removeItem('aquarium_save');
+      location.reload();
+    });
+
+    // Notifications
+    function notify(msg, type=''){
+      const el = document.createElement('div');
+      el.className = 'toast ' + (type||'');
+      el.textContent = msg;
+      toastWrap.appendChild(el);
+      setTimeout(()=>{ el.style.opacity='0'; el.style.transform='translateY(6px)'; }, 2800);
+      setTimeout(()=>el.remove(), 3200);
+    }
+    function log(msg){
+      const line = document.createElement('div');
+      line.textContent = msg;
+      logEl.appendChild(line);
+      logEl.scrollTop = logEl.scrollHeight;
+    }
+
+    // Procedural assets
+    function drawFishShape(ctx, size, c1, c2, eyeColor){
+      // Body
+      const len = size*2.6;
+      ctx.beginPath();
+      for(let i=0;i<=20;i++){
+        const t=i/20, x = (t-0.5)*len;
+        const r = size*(0.8 - 0.4*(t-0.5)*(t-0.5)*4);
+        if(i===0) ctx.moveTo(x, -r);
+        else ctx.lineTo(x, -r);
+      }
+      for(let i=20;i>=0;i--){
+        const t=i/20, x = (t-0.5)*len;
+        const r = size*(0.8 - 0.4*(t-0.5)*(t-0.5)*4);
+        ctx.lineTo(x, r);
+      }
+      const grad = ctx.createLinearGradient(-len/2,0,len/2,0);
+      grad.addColorStop(0,c1);
+      grad.addColorStop(1,c2);
+      ctx.fillStyle = grad;
+      ctx.fill();
+      // Tail
+      ctx.beginPath();
+      ctx.moveTo(len*0.45, 0);
+      ctx.quadraticCurveTo(len*0.65, -size*0.9, len*0.85, 0);
+      ctx.quadraticCurveTo(len*0.65, size*0.9, len*0.45, 0);
+      ctx.fillStyle = c2;
+      ctx.globalAlpha = 0.8;
+      ctx.fill();
+      ctx.globalAlpha = 1;
+      // Eye
+      ctx.beginPath();
+      ctx.fillStyle = '#fff';
+      ctx.arc(-len*0.25, -size*0.15, size*0.22, 0, Math.PI*2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.fillStyle = eyeColor;
+      ctx.arc(-len*0.25 + size*0.05, -size*0.17, size*0.12, 0, Math.PI*2);
+      ctx.fill();
+    }
+
+    function drawPlant(ctx, h, sway, baseColor='#7dff9a'){
+      ctx.save();
+      ctx.strokeStyle = baseColor;
+      ctx.lineWidth = 4;
+      ctx.lineCap = 'round';
+      const segments = 7;
+      ctx.beginPath();
+      ctx.moveTo(0,0);
+      for(let i=1;i<=segments;i++){
+        const y = -h*(i/segments);
+        const x = Math.sin(sway + i*0.6) * (i*i)*0.6;
+        ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+      // leaves
+      for(let i=1;i<=segments-1;i++){
+        const y = -h*(i/segments);
+        const x = Math.sin(sway + i*0.6) * (i*i)*0.6;
+        ctx.fillStyle = 'rgba(125,255,154,0.7)';
+        ctx.beginPath();
+        ctx.ellipse(x+6, y, 10, 3, 0.6, 0, Math.PI*2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.ellipse(x-6, y, 10, 3, -0.6, 0, Math.PI*2);
+        ctx.fill();
+      }
+      ctx.restore();
+    }
+
+    function drawRock(ctx, r, hue=210){
+      ctx.save();
+      const grad = ctx.createLinearGradient(-r, -r, r, r);
+      grad.addColorStop(0, `hsl(${hue},18%,35%)`);
+      grad.addColorStop(1, `hsl(${hue},12%,18%)`);
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      for(let i=0;i<10;i++){
+        const ang = i/10*Math.PI*2;
+        const rad = r * (0.8 + Math.sin(i*1.3)*0.1 + Math.random()*0.06);
+        const x = Math.cos(ang)*rad, y = Math.sin(ang)*rad*0.7;
+        i?ctx.lineTo(x,y):ctx.moveTo(x,y);
+      }
+      ctx.closePath(); ctx.fill();
+      ctx.restore();
+    }
+
+    function drawShell(ctx, r){
+      ctx.save();
+      ctx.fillStyle = '#ffdeb3';
+      ctx.strokeStyle = 'rgba(0,0,0,.1)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(-r,0);
+      ctx.quadraticCurveTo(-r*0.6,-r*0.8, 0, -r*0.7);
+      ctx.quadraticCurveTo(r*0.6,-r*0.8, r, 0);
+      ctx.quadraticCurveTo(0, r*0.3, -r, 0);
+      ctx.fill(); ctx.stroke();
+      ctx.restore();
+    }
+
+    function drawBubbler(ctx, size){
+      ctx.save();
+      ctx.fillStyle = '#a8b7c9';
+      ctx.fillRect(-size*0.4, -size, size*0.8, size);
+      ctx.fillStyle = '#657b94';
+      ctx.fillRect(-size*0.35, -size*0.6, size*0.7, size*0.6);
+      ctx.restore();
+    }
+
+    // Entities
+    function addFish(x=rand(W*0.2,W*0.8), y=rand(H*0.2,H*0.8)){
+      const bodyHue = (rand(200,140)|0);
+      const c1 = `hsl(${bodyHue}, 80%, 62%)`;
+      const c2 = `hsl(${(bodyHue+60)%360}, 80%, 55%)`;
+      const fish = {
+        id: uid(),
+        x, y,
+        vx: rand(-20,20), vy: rand(-10,10),
+        size: rand(12,8),
+        hunger: rand(0.3,0.7),
+        boredom: rand(0.2,0.6),
+        health: 1,
+        dir: 1,
+        name: pick(['Bubbles','Finley','Coral','Pebble','Splash','Nori','Sunny','Sushi','Blue','Nova','Pearl','Mojo']),
+        colors: [c1,c2],
+        eye: '#173b5e',
+        target: null,
+        age: 0,
+        curiosity: rand(0.3,0.9),
+      };
+      state.fish.push(fish);
+      return fish;
+    }
+
+    function addPellet(x,y){
+      state.food.push({
+        id: uid(),
+        x, y,
+        vy: 0,
+        size: 3,
+        consumed: false
+      });
+    }
+
+    function addDecor(type, x, y){
+      const deco = { id: uid(), type, x, y, r: rand(18,32), hue:(rand(180,240)|0) };
+      state.decor.push(deco);
+      return deco;
+    }
+
+    function addPlant(x,y){
+      const plant = { id: uid(), x, y, h: rand(70,120), sway: rand(Math.PI*2), vigor: 1 };
+      state.plants.push(plant);
+      return plant;
+    }
+
+    function addBubbler(x,y){
+      const bub = { id: uid(), x, y, size: 28, t: 0 };
+      state.bubblers.push(bub);
+      return bub;
+    }
+
+    function addBubble(x,y){
+      state.particles.push({
+        id: uid(),
+        type: 'bubble',
+        x, y,
+        r: rand(2,4),
+        vy: -rand(25,40),
+        life: 1
+      });
+    }
+
+    // Interactions
+    let mouse = {x:0,y:0, down:false, right:false};
+    canvas.addEventListener('mousemove', (e)=>{
+      const rect = canvas.getBoundingClientRect();
+      mouse.x = (e.clientX - rect.left) * (canvas.width / rect.width);
+      mouse.y = (e.clientY - rect.top) * (canvas.height / rect.height);
+      state.hover = pickEntityAt(mouse.x, mouse.y);
+      if(state.tool==='hand' && mouse.down){
+        state.attract = {x: mouse.x, y: mouse.y, strength: clamp(state.attract.strength+0.06, 0, 1)};
+      }
+    });
+    canvas.addEventListener('mouseleave', ()=>{
+      state.hover = null;
+      state.attract.strength = 0;
+    });
+    canvas.addEventListener('mousedown', (e)=>{
+      mouse.down = true; mouse.right = (e.button===2);
+      if(e.button===2){ e.preventDefault(); state.tool='hand'; updateToolButtons(); return; }
+      if(state.tool==='feed'){
+        for(let i=0;i<5;i++){
+          addPellet(mouse.x+rand(-10,10), mouse.y+rand(-10,10));
+        }
+        log("Dropped food pellets.");
+      } else if(state.tool==='placeDecor'){
+        const t = pick(['rock','shell']);
+        const d = addDecor(t, mouse.x, H-20);
+        log("Placed "+t+".");
+      } else if(state.tool==='plant'){
+        addPlant(mouse.x, H-10);
+        log("Planted aquatic plant.");
+      } else if(state.tool==='bubble'){
+        addBubbler(mouse.x, H-12);
+        log("Placed bubbler.");
+      } else if(state.tool==='net'){
+        const target = state.hover?.type==='fish' ? state.hover.obj : null;
+        if(target){
+          state.selectedFish = target;
+          notify("Fish selected: "+target.name);
+        }
+      } else if(state.tool==='hand'){
+        // simple ripple particles
+        for(let i=0;i<6;i++){
+          state.particles.push({
+            id: uid(), type:'spark', x: mouse.x, y: mouse.y,
+            vx: rand(-40,40), vy: rand(-30,10), life: 1, r: rand(1,2)
+          });
+        }
+      } else {
+        // select fish by click
+        const target = state.hover?.type==='fish' ? state.hover.obj : null;
+        if(target){ state.selectedFish = target; notify("Fish selected: "+target.name); }
+      }
+    });
+    addEventListener('mouseup', ()=>{ mouse.down=false; state.attract.strength = 0; });
+    canvas.addEventListener('contextmenu', (e)=>e.preventDefault());
+
+    // Cursor for tools
+    document.addEventListener('mousemove',(e)=>{
+      cursorEl.style.left = e.clientX+'px';
+      cursorEl.style.top = e.clientY+'px';
+    });
+    function updateCursor(){
+      cursorEl.style.display = 'block';
+      const colors = {
+        hand: 'rgba(120,220,255,.6)',
+        feed: 'rgba(255,210,120,.8)',
+        placeDecor: 'rgba(160,200,255,.8)',
+        net: 'rgba(255,140,140,.8)',
+        plant: 'rgba(120,255,170,.8)',
+        bubble: 'rgba(120,180,255,.8)'
+      };
+      cursorEl.style.borderColor = colors[state.tool] || 'rgba(120,220,255,.6)';
+      cursorEl.style.boxShadow = `0 0 18px ${colors[state.tool] || 'rgba(120,220,255,.4)'}`;
+    }
+
+    // Picking
+    function pickEntityAt(x,y){
+      // fish first
+      for(let i=state.fish.length-1;i>=0;i--){
+        const f=state.fish[i];
+        const dx=x-f.x, dy=y-f.y;
+        const r=f.size*2.2;
+        if(dx*dx+dy*dy<r*r) return {type:'fish', obj:f};
+      }
+      return null;
+    }
+
+    // Economy & Save
+    function save(){
+      const data = JSON.stringify({
+        version:1,
+        state:{
+          difficulty: state.difficulty, money: state.money, cleanliness: state.cleanliness, oxygen: state.oxygen, tankSize: state.tankSize,
+          fish: state.fish.map(f=>({x:f.x,y:f.y,vx:f.vx,vy:f.vy,size:f.size,hunger:f.hunger,boredom:f.boredom,health:f.health,dir:f.dir,name:f.name,colors:f.colors,eye:f.eye,age:f.age,curiosity:f.curiosity})),
+          food: state.food,
+          decor: state.decor,
+          plants: state.plants,
+          bubblers: state.bubblers
+        }
+      });
+      localStorage.setItem('aquarium_save', data);
+      notify("Saved.", 'good');
+    }
+    function load(){
+      const data = localStorage.getItem('aquarium_save');
+      if(!data) return false;
+      try{
+        const s = JSON.parse(data).state;
+        Object.assign(state, {
+          started: true,
+          difficulty: s.difficulty, money: s.money, cleanliness: s.cleanliness, oxygen: s.oxygen, tankSize: s.tankSize
+        });
+        state.fish = s.fish || [];
+        state.food = s.food || [];
+        state.decor = s.decor || [];
+        state.plants = s.plants || [];
+        state.bubblers = s.bubblers || [];
+        menu.classList.add('hidden');
+        initAquarium();
+        return true;
+      }catch(e){
+        notify("Failed to load.", 'bad');
+        return false;
+      }
+    }
+
+    // Simulation Parameters
+    const paramsByDiff = {
+      easy:   { hungerRate: 0.005, boredomRate: 0.004, healthPenalty: 0.02, cleanlinessDecay: 0.002, oxygenLoss: 0.01 },
+      normal: { hungerRate: 0.008, boredomRate: 0.006, healthPenalty: 0.03, cleanlinessDecay: 0.003, oxygenLoss: 0.015 },
+      hard:   { hungerRate: 0.011, boredomRate: 0.009, healthPenalty: 0.05, cleanlinessDecay: 0.005, oxygenLoss: 0.022 },
+    };
+
+    function initAquarium(){
+      // Seed initial entities based on tank size
+      const base = [3,5,7][state.tankSize];
+      for(let i=0;i<base;i++) addDecor(pick(['rock','shell']), rand(W*0.1,W*0.9), H-20);
+      for(let i=0;i<base;i++) addPlant(rand(W*0.1,W*0.9), H-10);
+      addBubbler(W*0.15, H-12);
+      addBubbler(W*0.85, H-12);
+      for(let i=0;i<([2,3,4][state.tankSize]);i++) addFish();
+      log("Aquarium ready. Difficulty: "+state.difficulty+".");
+      updateUI();
+    }
+
+    // Core Loop
+    function step(dt){
+      // environmental effects
+      const p = paramsByDiff[state.difficulty];
+      const pop = state.fish.length;
+      const decorScore = state.decor.length + state.plants.length*1.5;
+      state.cleanliness = clamp(state.cleanliness - (state.food.length*0.0003 + pop*0.0004 + p.cleanlinessDecay*dt*0.2), 0, 1);
+      const oxygenBonus = state.bubblers.length*0.02 + state.plants.length*0.015;
+      state.oxygen = clamp(state.oxygen + oxygenBonus*dt - (0.02 + pop*0.005 + p.oxygenLoss*dt*0.2), 0, 1);
+
+      // bubblers produce bubbles
+      state.bubblers.forEach(b=>{
+        b.t += dt;
+        if(Math.random()<0.3) addBubble(b.x + rand(-4,4), b.y - b.size);
+      });
+
+      // particles update
+      state.particles = state.particles.filter(pt=>{
+        if(pt.type==='bubble'){
+          pt.y += pt.vy*dt;
+          pt.x += Math.sin((pt.y+pt.id)*0.06)*8*dt;
+          pt.life -= dt*0.25;
+          return pt.life>0 && pt.y>20;
+        } else if(pt.type==='spark'){
+          pt.x += pt.vx*dt; pt.y += pt.vy*dt; pt.vy += 40*dt;
+          pt.life -= dt*0.8; return pt.life>0;
+        }
+        return false;
+      });
+
+      // food pellets physics
+      state.food = state.food.filter(f=>{
+        if(f.consumed) return false;
+        f.vy += 50*dt;
+        f.y += f.vy*dt;
+        if(f.y > H-8){ f.y = H-8; f.vy*= -0.2; }
+        return true;
+      });
+
+      // fish AI
+      state.fish.forEach(f=>{
+        f.age += dt;
+        // update needs
+        f.hunger = clamp(f.hunger + p.hungerRate * dt, 0, 1.5);
+        // boredom decreases with decor around, increases otherwise
+        const nearDecor = state.decor.length + state.plants.length*1.2;
+        const boredomDelta = (nearDecor>4? -0.02 : 0.02) + (nearDecor-4)*-0.002;
+        f.boredom = clamp(f.boredom + (p.boredomRate + boredomDelta)*dt, 0, 1.5);
+
+        const healthDrop = (f.hunger>1? (f.hunger-1)*p.healthPenalty:0) + (f.boredom>1? (f.boredom-1)*p.healthPenalty*0.7:0) + ((1-state.cleanliness)*0.015) + ((0.4-state.oxygen>0)?(0.4-state.oxygen)*0.05:0);
+        f.health = clamp(f.health - healthDrop*dt + 0.015*dt, 0, 1); // small passive regen
+
+        // target food if hungry
+        if(f.hunger>0.5 && state.food.length){
+          // choose nearest pellet
+          let best=null, bestD=1e9;
+          for(const food of state.food){
+            const dx = food.x - f.x, dy = food.y - f.y;
+            const d2 = dx*dx+dy*dy;
+            if(d2<bestD){ bestD = d2; best = food; }
+          }
+          if(best) f.target = {x: best.x, y: best.y, type:'food', ref: best};
+        } else if(state.attract.strength>0 && Math.random()<f.curiosity*0.7){
+          f.target = {x: lerp(f.x, state.attract.x, 0.6), y: lerp(f.y, state.attract.y, 0.6), type:'attract'};
+        } else if(Math.random()<0.01){
+          f.target = {x: rand(40,W-40), y: rand(40,H-60), type:'wander'};
+        }
+
+        // steering
+        const tx = f.target?.x ?? f.x + f.vx*1.5;
+        const ty = f.target?.y ?? f.y + f.vy*1.5;
+        const ax = clamp((tx - f.x)*0.4, -30, 30);
+        const ay = clamp((ty - f.y)*0.4, -30, 30);
+        f.vx = clamp(f.vx + ax*dt, -60, 60);
+        f.vy = clamp(f.vy + ay*dt, -40, 40);
+
+        // oxygen affects speed
+        const speedFactor = lerp(0.6, 1.2, state.oxygen);
+        f.x += f.vx*dt*speedFactor;
+        f.y += f.vy*dt*speedFactor;
+
+        // walls
+        const margin = 24;
+        if(f.x<margin){ f.x=margin; f.vx=Math.abs(f.vx); }
+        if(f.x>W-margin){ f.x=W-margin; f.vx=-Math.abs(f.vx); }
+        if(f.y<margin){ f.y=margin; f.vy=Math.abs(f.vy); }
+        if(f.y>H-margin){ f.y=H-margin; f.vy=-Math.abs(f.vy); }
+
+        // eat food
+        if(f.target?.type==='food'){
+          const food=f.target.ref;
+          if(food && Math.hypot(food.x-f.x, food.y-f.y) < f.size*1.6){
+            food.consumed = true;
+            f.hunger = Math.max(0, f.hunger - 0.7);
+            f.health = clamp(f.health + 0.1, 0, 1);
+            f.boredom = Math.max(0, f.boredom - 0.1);
+            state.money += 2; // tiny reward
+            notify(f.name+" ate a pellet (+$2).", 'good');
+            f.target = null;
+          }
+        }
+
+        // selected fish gentle sparkle
+        if(state.selectedFish===f && Math.random()<0.02){
+          state.particles.push({id:uid(), type:'spark', x:f.x, y:f.y, vx:rand(-10,10), vy:rand(-10,10), r:1.5, life:1});
+        }
+
+        // facing direction
+        f.dir = (f.vx>=0)?1:-1;
+      });
+
+      // remove consumed food
+      state.food = state.food.filter(f=>!f.consumed);
+
+      // mortality
+      for(let i=state.fish.length-1;i>=0;i--){
+        const f=state.fish[i];
+        if(f.health<=0){
+          log(f.name+" has passed away.");
+          notify("A fish died.", 'bad');
+          state.fish.splice(i,1);
+        }
+      }
+
+      // boredom softening via decor proximity
+      // if fish near decor, slightly reduce boredom
+      state.fish.forEach(f=>{
+        for(const d of state.decor){
+          if(Math.abs(d.x - f.x) < 80 && Math.abs(H-20 - f.y) < 100){
+            f.boredom = Math.max(0, f.boredom - 0.02*dt);
+          }
+        }
+        for(const p of state.plants){
+          if(Math.hypot(p.x - f.x, p.y - f.y) < 120){
+            f.boredom = Math.max(0, f.boredom - 0.015*dt);
+          }
+        }
+      });
+
+      // Update attract decay
+      state.attract.strength = Math.max(0, state.attract.strength - 0.4*dt);
+    }
+
+    function render(){
+      // background water with gradient and fake depth
+      const grd = ctx.createLinearGradient(0,0,0,H);
+      grd.addColorStop(0, `rgba(16,46,78,${0.85*state.clarity})`);
+      grd.addColorStop(1, `rgba(7,20,34,${0.95*state.clarity})`);
+      ctx.fillStyle = grd;
+      ctx.fillRect(0,0,W,H);
+
+      // soft beams
+      ctx.save();
+      ctx.globalAlpha = 0.08 * state.clarity;
+      for(let i=0;i<6;i++){
+        ctx.beginPath();
+        const x = (i/6)*W + Math.sin((now()+i)*0.7)*40;
+        ctx.moveTo(x-80,0); ctx.lineTo(x+60,0);
+        ctx.lineTo(x+120,H); ctx.lineTo(x-120,H); ctx.closePath();
+        const g = ctx.createLinearGradient(x,0,x,H);
+        g.addColorStop(0,'#7fdbff'); g.addColorStop(1,'transparent');
+        ctx.fillStyle = g; ctx.fill();
+      }
+      ctx.restore();
+
+      // sand bed
+      ctx.save();
+      ctx.fillStyle = '#0b1320';
+      ctx.fillRect(0,H-16,W,16);
+      const sandGrad = ctx.createLinearGradient(0,H-40,0,H);
+      sandGrad.addColorStop(0,'#121d2e'); sandGrad.addColorStop(1,'#0b1320');
+      ctx.fillStyle = sandGrad;
+      ctx.fillRect(0,H-40,W,40);
+      ctx.restore();
+
+      // plants
+      state.plants.forEach(p=>{
+        ctx.save();
+        ctx.translate(p.x, H-6);
+        drawPlant(ctx, p.h, now()*1.5 + p.sway);
+        ctx.restore();
+      });
+
+      // decor
+      state.decor.forEach(d=>{
+        ctx.save();
+        ctx.translate(d.x, d.y);
+        if(d.type==='rock') drawRock(ctx, d.r, d.hue);
+        else drawShell(ctx, d.r*0.8);
+        ctx.restore();
+      });
+
+      // bubblers and bubbles
+      state.bubblers.forEach(b=>{
+        ctx.save();
+        ctx.translate(b.x, b.y);
+        drawBubbler(ctx, b.size);
+        ctx.restore();
+      });
+
+      // particles
+      state.particles.forEach(pt=>{
+        if(pt.type==='bubble'){
+          ctx.save();
+          ctx.globalAlpha = 0.6;
+          ctx.strokeStyle = 'rgba(180,220,255,.8)';
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.arc(pt.x, pt.y, pt.r, 0, Math.PI*2);
+          ctx.stroke();
+          ctx.restore();
+        } else if(pt.type==='spark'){
+          ctx.save();
+          ctx.globalAlpha = pt.life;
+          ctx.fillStyle = '#8df';
+          ctx.beginPath(); ctx.arc(pt.x, pt.y, pt.r, 0, Math.PI*2); ctx.fill();
+          ctx.restore();
+        }
+      });
+
+      // food pellets
+      state.food.forEach(f=>{
+        ctx.save();
+        ctx.fillStyle = '#ffd166';
+        ctx.beginPath(); ctx.arc(f.x, f.y, f.size, 0, Math.PI*2); ctx.fill();
+        ctx.restore();
+      });
+
+      // fish
+      state.fish.forEach(f=>{
+        ctx.save();
+        ctx.translate(f.x, f.y);
+        ctx.scale(f.dir, 1);
+        const r = f.size;
+        drawFishShape(ctx, r, f.colors[0], f.colors[1], f.eye);
+        // status bars
+        const bw = r*2.2;
+        ctx.scale(1/f.dir, 1);
+        ctx.translate(-bw*0.5, r*1.6);
+        const bar = (color, value)=>{
+          ctx.fillStyle = 'rgba(0,0,0,.35)';
+          ctx.fillRect(0,0,bw,5);
+          ctx.fillStyle = color;
+          ctx.fillRect(0,0,bw*clamp(value,0,1),5);
+          ctx.translate(0,6);
+        };
+        bar('linear-gradient(90deg,#78ffb6,#58d7ff)', f.health);
+        bar('#ffd166', 1 - clamp(f.hunger,0,1)); // hunger inverted
+        bar('#9a7cff', 1 - clamp(f.boredom,0,1)); // boredom inverted
+        ctx.restore();
+
+        // selection ring
+        if(state.selectedFish===f){
+          ctx.save();
+          ctx.strokeStyle = 'rgba(255,255,255,.6)';
+          ctx.beginPath(); ctx.arc(f.x, f.y, r*2.6, 0, Math.PI*2); ctx.stroke();
+          ctx.restore();
+        }
+      });
+
+      // hover tooltip
+      if(state.hover?.type==='fish'){
+        const f = state.hover.obj;
+        tooltip.style.left = (f.x)+'px';
+        tooltip.style.top = (f.y)+'px';
+        tooltip.textContent = `${f.name} | Health ${(f.health*100|0)}% | Hunger ${(clamp(f.hunger,0,1)*100|0)}% | Boredom ${(clamp(f.boredom,0,1)*100|0)}%`;
+        tooltip.style.opacity = 1;
+      } else {
+        tooltip.style.opacity = 0;
+      }
+
+      // caustic overlay slight vignette
+      ctx.save();
+      const vign = ctx.createRadialGradient(W/2,H/2,Math.min(W,H)*0.4, W/2,H/2, Math.min(W,H)*0.9);
+      vign.addColorStop(0,'transparent');
+      vign.addColorStop(1,'rgba(0,0,0,.25)');
+      ctx.fillStyle = vign;
+      ctx.fillRect(0,0,W,H);
+      ctx.restore();
+    }
+
+    function updateUI(){
+      moneyValue.textContent = Math.max(0, state.money|0);
+      cleanlinessBar.style.width = (state.cleanliness*100).toFixed(0)+'%';
+      cleanlinessText.textContent = (state.cleanliness*100|0)+'%';
+      oxygenBar.style.width = (state.oxygen*100).toFixed(0)+'%';
+      oxygenText.textContent = (state.oxygen*100|0)+'%';
+      popText.textContent = state.fish.length;
+      decorText.textContent = state.decor.length + (state.bubblers.length? ` (+${state.bubblers.length} bubblers)`: '');
+      plantText.textContent = state.plants.length;
+      foodText.textContent = state.food.length;
+      updateCursor();
+    }
+
+    // Main loop
+    function loop(){
+      const t = now();
+      let dt = Math.min(0.05, t - state.lastTime);
+      state.lastTime = t;
+      dt *= state.timeScale;
+
+      if(state.started){
+        step(dt);
+        render();
+        updateUI();
+      }
+
+      requestAnimationFrame(loop);
+    }
+    loop();
+
+    // Autoload if save exists and user wants to continue (optional)
+    // Commented out to always show menu; uncomment to auto load.
+    // if(load()){ notify("Autosave loaded.", 'good'); }
+
+  </script>
+</body>
+</html>
